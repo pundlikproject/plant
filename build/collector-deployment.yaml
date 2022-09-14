@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: collector
+  namespace: plant
+spec:
+  selector:
+    matchLabels:
+      app: collector
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: collector
+    spec:
+      containers:
+      - name: collector
+        image: sarafdarpundlik/collector:0.0.2
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 80    
