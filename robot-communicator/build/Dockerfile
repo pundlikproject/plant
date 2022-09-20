@@ -1,6 +1,6 @@
 FROM ubuntu:20.04
 
-EXPOSE 80
+EXPOSE 8080
 
 COPY build/api ./
 

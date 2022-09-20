@@ -1,6 +1,9 @@
 FROM ubuntu:20.04
 
-EXPOSE 80
+RUN apt-get update && apt-get install -y \
+curl
+
+EXPOSE 8081
 
 COPY build/api ./
 

@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	traceLog "github.com/opentracing/opentracing-go/log"
+	log "github.com/sirupsen/logrus"
 	plantservice "github.com/terracegarden/collector/pkg/plant"
 	"github.com/terracegarden/framework/config"
 	datamodel "github.com/terracegarden/framework/database/model/data-model"
@@ -25,15 +25,34 @@ import (
 var tracer opentracing.Tracer
 var closer io.Closer
 
+type customLogger struct {
+	formatter log.JSONFormatter
+}
+
+func (l customLogger) Format(entry *log.Entry) ([]byte, error) {
+	if entry.Context != nil {
+		entry.Data["trace_id"] = entry.Context.Value("trace_id")
+		entry.Data["span_id"] = entry.Context.Value("span_id")
+	}
+	return l.formatter.Format(entry)
+}
+
 func InitFramework(ctx context.Context) {
+	log.SetLevel(log.DebugLevel)
+
 	//Init logger
-	tracer, closer = Init("plant-chip")
+	tracer, closer = Init("PlantService")
 
 	//defer closer.Close()
 	opentracing.SetGlobalTracer(tracer)
+	log.SetFormatter(customLogger{
+		formatter: log.JSONFormatter{FieldMap: log.FieldMap{
+			"msg": "message",
+		}},
+	})
 
 	cfg := config.FrameworkConfig{
-		DbConf: &config.DbConfig{Url: "localhost:5432", Database: "postgres", UserName: "postgres", Password: "passwd@123", PoolSize: 100},
+		DbConf: &config.DbConfig{Url: "postgres:5432", Database: "postgres", UserName: "postgres", Password: "passwd@123", PoolSize: 100},
 	}
 	err := initialize.Init(ctx, cfg)
 	if err != nil {
@@ -51,7 +70,7 @@ func StartRestServer(ctx context.Context) {
 	router.HandleFunc("/rest/get_plants/{chipId}", GetPlants).Methods("GET")
 	router.HandleFunc("/rest/set_schedule/{chipId}", SetSchedule).Methods("POST")
 
-	log.Println("Starting server.")
+	log.Debug("Starting server.")
 	log.Fatal(http.ListenAndServe(":8081", router))
 }
 
@@ -113,12 +132,21 @@ func GetChips(w http.ResponseWriter, r *http.Request) {
 	span.LogFields(
 		traceLog.String("owner-id", ownerId),
 	)
-	defer span.Finish()
+	spnCtx1 := span.Context()
 
+	spnId := spnCtx1.(jaeger.SpanContext)
+	trace_id := spnId.TraceID().String()
+	span_id := spnId.SpanID().String()
+	defer span.Finish()
+	ctx = context.WithValue(ctx, "trace_id", trace_id)
+	ctx = context.WithValue(ctx, "span_id", span_id)
+
+	log.WithContext(ctx).Debugln("Function")
 	chips, err := service.GetChips(ctx, ownerId)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error code %v", err), http.StatusNotFound)
 	}
+
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("content-type", "application/json")
 	json.NewEncoder(w).Encode(chips)
@@ -135,7 +163,7 @@ func GetPlants(w http.ResponseWriter, r *http.Request) {
 		opentracing.HTTPHeaders,
 		opentracing.HTTPHeadersCarrier(r.Header),
 	)
-	span, ctx := opentracing.StartSpanFromContext(r.Context(), "GetPlants", ext.RPCServerOption(spanCtx))
+	span, ctx := opentracing.StartSpanFromContext(r.Context(), "Get-Plants", ext.RPCServerOption(spanCtx))
 	span.LogFields(
 		traceLog.String("chip-id", chipId),
 	)
@@ -167,16 +195,10 @@ func SetSchedule(w http.ResponseWriter, r *http.Request) {
 }
 
 func Init(service string) (opentracing.Tracer, io.Closer) {
-	cfg := &configJ.Configuration{
-		ServiceName: service,
-		Sampler: &configJ.SamplerConfig{
-			Type:  "const",
-			Param: 1,
-		},
-		Reporter: &configJ.ReporterConfig{
-			LogSpans: true,
-		},
-	}
+	cfg, _ := configJ.FromEnv()
+	cfg.ServiceName = service
+	cfg.Reporter.LogSpans = true
+	log.Infof("Jeager config %+v", cfg)
 	tracer, closer, err := cfg.NewTracer(configJ.Logger(jaeger.StdLogger))
 	if err != nil {
 		panic(fmt.Sprintf("ERROR: cannot init Jaeger: %v\n", err))

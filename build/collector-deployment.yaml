@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: collector
-        image: sarafdarpundlik/collector:0.0.2
+        image: sarafdarpundlik/collector:0.0.1
         imagePullPolicy: Never
         ports:
-        - containerPort: 80    
+        - containerPort: 8081  

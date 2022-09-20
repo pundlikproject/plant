@@ -1,0 +1,67 @@
+version: '3'
+services:
+  postgres:
+    image: postgres:14.1-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_URL: postgres:5432
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: passwd@123
+    ports:
+      - '8432:5432'
+    volumes: 
+      - db:/var/lib/postgresql/data
+  collector:
+    image: sarafdarpundlik/collector:0.0.1
+    container_name: collector
+    ports:
+      - "8181:8081"
+    depends_on:
+      - postgres
+    environment:
+        - ASPNETCORE_ENVIRONMENT=Development
+        - JAEGER_SERVICE_NAME=collector-service
+        - JAEGER_AGENT_HOST=jaeger-agent
+        - JAEGER_AGENT_PORT=6831
+        - JAEGER_SAMPLER_TYPE=const
+        - JAEGER_SAMPLER_PARAM=1  
+        - SCHEDULE_HOST=schedular:8080
+  schedular:
+    image: sarafdarpundlik/schedular:0.0.1
+    container_name: schedular
+    ports:
+      - "8180:8080"
+    depends_on:
+      - postgres 
+    environment:
+        - ASPNETCORE_ENVIRONMENT=Development
+        - JAEGER_SERVICE_NAME=schedular-service
+        - JAEGER_AGENT_HOST=jaeger-agent
+        - JAEGER_AGENT_PORT=6831
+        - JAEGER_SAMPLER_TYPE=const
+        - JAEGER_SAMPLER_PARAM=1        
+  client-ui:
+    image: sarafdarpundlik/client-ui:0.0.1
+    container_name: client-ui
+    ports:
+      - "80:80"
+    depends_on:
+      - collector      
+  jaeger-agent:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger.agent
+    ports:
+        - "5775:5775/udp"
+        - "6831:6831/udp"
+        - "6832:6832/udp"
+        - "5778:5778/tcp"
+        - "16686:16686"
+        - "14268:14268"
+        - "14269:14269"
+        - "9411:9411"
+    depends_on:
+      - collector       
+volumes:
+  db:
+    driver: local

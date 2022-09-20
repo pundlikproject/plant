@@ -2,7 +2,8 @@ package main
 
 import (
 	"context"
-	"log"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/terracegarden/collector/initiator"
 	mqttserv "github.com/terracegarden/collector/internal/mqtt-server"
@@ -14,11 +15,11 @@ func main() {
 	//Initialize framework
 	initiator.InitFramework(ctx)
 
-	log.Print("Starting MQTT server")
+	log.Info("Starting MQTT server")
 	//Start mqtt server
 	mqttserv.StartMqttServer(ctx, ":1883")
 
-	log.Print("Starting REST server")
+	log.Info("Starting REST server")
 	//Starting rest server
 	initiator.StartRestServer(ctx)
 }

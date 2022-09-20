@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: schedular
+  namespace: plant
+spec:
+  selector:
+    matchLabels:
+      app: schedular
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: schedular
+    spec:
+      containers:
+      - name: schedular
+        image: sarafdarpundlik/schedular:0.0.1
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 80    
